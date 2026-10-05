@@ -55,7 +55,7 @@ def validate_queries(queries, dense_size=None):
 
 
 def run_sweep(client, collection, queries, dense_name='dense', sparse_name='bm25',
-              depths=(20, 50), ks=(2, 5, 20, 61), weight_pairs=((1., 1.),), limit=10):
+              depths=(20, 50), ks=(2, 5, 20, 61), weight_pairs=((1., 1.),), limit=10, config_names=None):
     """Execute dense/sparse baselines then RRF/DBSF. No embeddings are inferred.
 
     Client/server errors propagate. Latencies are serial request timings, not load
@@ -75,15 +75,19 @@ def run_sweep(client, collection, queries, dense_name='dense', sparse_name='bm25
             for weights in weight_pairs:
                 configs.append((f'rrf_k{k}_w{weights[0]:g}-{weights[1]:g}_depth{depth}',
                     models.RrfQuery(rrf=models.Rrf(k=k, weights=list(weights))), None, depth))
+    if config_names is not None:
+        configs = [c for c in configs if c[0] in config_names]
+        if not {'dense', 'sparse'} <= {c[0] for c in configs}:
+            raise ValueError('Selected configs must include dense and sparse baselines')
     rows = []
     for name, fusion, using, depth in configs:
         scores, timings, rankings = [], [], []
         for q in queries:
             sparse = models.SparseVector(**q['sparse'])
             if fusion is None:
-                request = dict(query=q['dense'] if using == dense_name else sparse, using=using)
+                request = dict(query=q['dense'] if using == dense_name else sparse, using=using, search_params=models.SearchParams(exact=True))
             else:
-                request = dict(prefetch=[models.Prefetch(query=q['dense'], using=dense_name, limit=depth),
+                request = dict(prefetch=[models.Prefetch(query=q['dense'], using=dense_name, limit=depth, params=models.SearchParams(exact=True)),
                     models.Prefetch(query=sparse, using=sparse_name, limit=depth)], query=fusion)
             start = time.perf_counter()
             points = client.query_points(collection_name=collection, limit=limit,
