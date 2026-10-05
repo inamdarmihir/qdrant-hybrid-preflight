@@ -47,7 +47,7 @@ The demo writes a collection called `hybrid_preflight_demo`. It refuses to overw
 # Never put keys in a query file or commit them.
 python cli.py check \
   --url http://localhost:6333 --collection my_collection \
-  --sparse-name bm25 --request examples/request.json \
+  --sparse-name bm25 --request example-request.json \
   --bm25-avg-len 42 --measured-avg-len 40 \
   --labeled-query-count 120 --output check.json
 ```
@@ -56,7 +56,7 @@ The numbers 42, 40 and 120 are examples, not measurements. Replace them with you
 
 ## Sweep your own labels
 
-Supply a JSON list shaped like `examples/queries.json`. Each query has a unique ID, its dense and sparse query vectors, and `qrels` mapping point IDs (as strings) to nonnegative relevance grades. Every query must have a positive judgment. Unknown returned documents count as relevance zero. Point IDs must match your collection's IDs, not a document title.
+Supply a JSON list shaped like `example-queries.json`. Each query has a unique ID, its dense and sparse query vectors, and `qrels` mapping point IDs (as strings) to nonnegative relevance grades. Every query must have a positive judgment. Unknown returned documents count as relevance zero. Point IDs must match your collection's IDs, not a document title.
 
 ```bash
 python cli.py sweep \
@@ -83,7 +83,7 @@ Use a development set to choose settings, then rerun the chosen configuration on
 
 On 2026-10-05, the automated implementation run completed:
 
-- 22 tests, all passing (`results/test-output.txt`).
+- 22 tests, all passing (see `RUN.md`).
 - Local in-memory demo: 28 configurations, 12 queries, six hand-authored points.
 - Real Qdrant 1.17.1 server binary: the same demo, plus a read-only CLI collection check.
 
@@ -94,7 +94,7 @@ On 2026-10-05, the automated implementation run completed:
 
 These are a smoke test, NOT retrieval quality evidence. The fixture has deliberate score ties, six points and reused query patterns. Local/server tie order and even repeated server request order can change ranks. Do not read a winner or a production improvement into these numbers. Depths 10 and 20 both exceed the entire six-point corpus, so this fixture does not validate candidate truncation behavior.
 
-Measured CSV summaries are in `results/`. Running the demo writes full JSON with individual rankings. Timings are serial cold/warm mixed request timings from one sandbox, not concurrency or latency-budget benchmarks. Local mode is not a substitute for server sharding, HNSW/index behavior, or production data. No real corpus, tokenizer-based avg_len, BM25 text encoding or multi-shard experiment has been measured here.
+Measured CSV summaries are in `toy-local.csv` and `toy-server.csv`. Running the demo writes full JSON with individual rankings. Timings are serial cold/warm mixed request timings from one sandbox, not concurrency or latency-budget benchmarks. Local mode is not a substitute for server sharding, HNSW/index behavior, or production data. No real corpus, tokenizer-based avg_len, BM25 text encoding or multi-shard experiment has been measured here.
 
 ## Files
 
@@ -102,9 +102,9 @@ Measured CSV summaries are in `results/`. Running the demo writes full JSON with
 - `sweep.py`: validation, query grid, metric and paired intervals.
 - `cli.py`: read-only commands for an existing collection.
 - `demo.py`: disposable synthetic fixture.
-- `examples/`: query/request schemas illustrated with toy data.
-- `tests/`: validation, recursive checks and local-engine integration.
-- `results/`: actual smoke-test summaries, not research claims.
+- `example-queries.json`, `example-request.json`: toy query/request schemas.
+- `test_preflight.py`, `test_sweep.py`: validation, recursive checks and local-engine integration.
+- `RUN.md`, `toy-local.csv`, `toy-server.csv`: actual smoke-test summaries, not research claims.
 
 ## Sources and relationship to the article
 
