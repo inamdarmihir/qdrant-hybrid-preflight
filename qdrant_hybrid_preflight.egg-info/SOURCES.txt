@@ -1,0 +1,17 @@
+LICENSE
+README.md
+pyproject.toml
+qdrant_hybrid_preflight/__init__.py
+qdrant_hybrid_preflight/__main__.py
+qdrant_hybrid_preflight/benchmark.py
+qdrant_hybrid_preflight/cli.py
+qdrant_hybrid_preflight/preflight.py
+qdrant_hybrid_preflight/sweep.py
+qdrant_hybrid_preflight.egg-info/PKG-INFO
+qdrant_hybrid_preflight.egg-info/SOURCES.txt
+qdrant_hybrid_preflight.egg-info/dependency_links.txt
+qdrant_hybrid_preflight.egg-info/entry_points.txt
+qdrant_hybrid_preflight.egg-info/requires.txt
+qdrant_hybrid_preflight.egg-info/top_level.txt
+tests/test_benchmark.py
+tests/test_offline.py

@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qdrant-hybrid-preflight"
+version = "0.1.0"
+description = "Read-only preflight and fusion sweep for hybrid (dense + sparse) search on Qdrant, with a held-out SciFact benchmark."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "Mihir Inamdar" }]
+keywords = ["qdrant", "hybrid-search", "bm25", "rrf", "dbsf", "retrieval", "evaluation"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Database",
+]
+dependencies = [
+    "qdrant-client>=1.17.1",
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+# Pinned to the versions behind the committed results.
+benchmark = [
+    "fastembed==0.7.4",
+    "onnxruntime==1.23.2",
+    "tokenizers==0.23.2",
+]
+dev = ["pytest>=8"]
+
+[project.urls]
+Homepage = "https://github.com/inamdarmihir/qdrant-hybrid-preflight"
+Issues = "https://github.com/inamdarmihir/qdrant-hybrid-preflight/issues"
+
+[project.scripts]
+qdrant-hybrid-preflight = "qdrant_hybrid_preflight.cli:main"
+qdrant-hybrid-preflight-benchmark = "qdrant_hybrid_preflight.benchmark:main"
+
+[tool.setuptools]
+packages = ["qdrant_hybrid_preflight"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["realdata: downloads BEIR SciFact and needs the benchmark extra"]

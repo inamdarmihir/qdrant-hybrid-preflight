@@ -1,10 +1,14 @@
 """Tests use the checksum-verified real BEIR SciFact files, not fabricated docs."""
+import pytest
 from pathlib import Path
 from qdrant_client import QdrantClient, models
-from fastembed import SparseTextEmbedding
-from benchmark import load_data, tokenized_average
-from preflight import preflight_hybrid_search
-from sweep import validate_queries, ndcg, paired_interval
+pytest.importorskip("fastembed")
+from fastembed import SparseTextEmbedding  # noqa: E402
+from qdrant_hybrid_preflight.benchmark import load_data, tokenized_average  # noqa: E402
+from qdrant_hybrid_preflight.preflight import preflight_hybrid_search  # noqa: E402
+from qdrant_hybrid_preflight.sweep import validate_queries, ndcg, paired_interval  # noqa: E402
+
+pytestmark = pytest.mark.realdata
 
 
 def test_real_dataset_and_qrels():

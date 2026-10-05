@@ -4,12 +4,12 @@ import json
 import os
 from pathlib import Path
 from qdrant_client import QdrantClient, models
-from preflight import preflight_hybrid_search
-from sweep import run_sweep
+from .preflight import preflight_hybrid_search
+from .sweep import run_sweep
 
 
-def main():
-    p = argparse.ArgumentParser(description=__doc__)
+def main(argv=None):
+    p = argparse.ArgumentParser(prog='qdrant-hybrid-preflight', description=__doc__)
     p.add_argument('command', choices=['check', 'sweep'])
     p.add_argument('--url', required=True)
     p.add_argument('--collection', required=True)
@@ -25,7 +25,7 @@ def main():
     p.add_argument('--ks', type=int, nargs='+', default=[2, 5, 20, 61])
     p.add_argument('--limit', type=int, default=10)
     p.add_argument('--output', required=True)
-    args = p.parse_args()
+    args = p.parse_args(argv)
     client = QdrantClient(url=args.url, api_key=os.environ.get('QDRANT_API_KEY'))
     request = models.QueryRequest.model_validate_json(Path(args.request).read_text()) if args.request else None
     queries = json.loads(Path(args.queries).read_text()) if args.queries else None

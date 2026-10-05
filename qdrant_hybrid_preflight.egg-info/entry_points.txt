@@ -1,0 +1,3 @@
+[console_scripts]
+qdrant-hybrid-preflight = qdrant_hybrid_preflight.cli:main
+qdrant-hybrid-preflight-benchmark = qdrant_hybrid_preflight.benchmark:main
