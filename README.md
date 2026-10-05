@@ -1,14 +1,29 @@
-# Qdrant Hybrid Preflight
+# 🧪 Qdrant Hybrid Preflight: Check the Setup Before You Trust a Hybrid-Search Result
 
-**Check the setup before trusting a hybrid-search result.**
+> **A read-only preflight for existing Qdrant collections, plus a runnable SciFact experiment with a development split and a held-out split. Every number below comes from the committed run.**
+
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](requirements.txt)
+[![Tested with Qdrant 1.17.1](https://img.shields.io/badge/tested%20with-Qdrant%201.17.1-dc244c.svg)](RUN.md)
+[![Last commit](https://img.shields.io/github/last-commit/inamdarmihir/qdrant-hybrid-preflight)](https://github.com/inamdarmihir/qdrant-hybrid-preflight/commits/main)
+
+---
+
+## 🚀 What Is This?
 
 This repo combines a read-only preflight check for existing Qdrant collections with a runnable SciFact experiment. It checks encoder assumptions and query structure, sweeps fusion settings on a development split, then evaluates the selected configuration on held-out queries.
 
 The companion [article](https://mihirinamdar.substack.com/p/your-hybrid-search-benchmark-may) predates this repo. The benchmark adds measured evidence without changing the published article.
 
-[Quickstart](#quickstart) · [Results](#results) · [Preflight checks](#preflight-checks) · [Your collection](#your-collection) · [Limits](#limits)
+- **🔍 Read-only**: `cli.py check` and `cli.py sweep` inspect a collection and never write to it
+- **📊 Measured**: SciFact, 5,183 documents, tuned on 150 queries and scored on 150 held-out queries
+- **🧾 Inspectable**: CSV/JSON results, `metadata.json` and `RUN.md` are committed next to the code
+- **⚖️ Honest**: one dataset, one encoder pair, one split; the limits are listed below
 
-## Quickstart
+[Quickstart](#-quick-start) · [Results](#-results) · [Preflight checks](#-preflight-checks) · [Your collection](#-your-collection) · [Limits](#-limits)
+
+---
+
+## ⚡ Quick Start
 
 Python 3.10+, Docker, CPU, internet for the first data/model downloads, and several GB of disk space. Use a disposable Qdrant server:
 
@@ -39,7 +54,9 @@ python -m pytest -q test_benchmark.py
 
 Generated outputs go to `results/`: development and held-out CSV/JSON, per-query rankings and metadata. Dense embeddings are cached using dataset and model provenance. Cached runtime is not first-run runtime.
 
-## Results
+---
+
+## 📊 Results
 
 Committed run: October 5, 2026, Qdrant 1.17.1. Development selected **DBSF with 50 candidates from each retriever** out of a 28-configuration grid.
 
@@ -55,7 +72,9 @@ This interval describes the fixed chosen configuration on this sample. It is not
 
 Evidence: [`development.csv`](development.csv), [`heldout.csv`](heldout.csv), [`metadata.json`](metadata.json) and [`RUN.md`](RUN.md). The committed evidence is at the repository root; new benchmark runs write under `results/` by default. Serial HTTP timings are not concurrent-load latency measurements.
 
-## Preflight checks
+---
+
+## 🛠️ Preflight Checks
 
 | Check | What it inspects | What it cannot establish |
 | --- | --- | --- |
@@ -79,7 +98,9 @@ real corpus + encoders + Qdrant config + request
               held-out paired evaluation
 ```
 
-## Reproduction details
+---
+
+## 🔬 Reproduction Details
 
 - BEIR SciFact: all 5,183 documents, title + space + abstract, no chunking. Archive MD5 `5f7d1de60b170fc8027bb7898e2efca1`; download URL and SHA256 recorded in metadata.
 - All 300 judged test queries: sort IDs lexicographically, shuffle with `random.Random(42)`, split 150/150. **This is a custom split of BEIR's test set**, not the official BEIR train/test protocol. Exact IDs are recorded.
@@ -89,7 +110,9 @@ real corpus + encoders + Qdrant config + request
 - Python 3.10.12, qdrant-client 1.17.1, FastEmbed 0.7.4. Recorded environment: Linux x86_64, Intel Xeon, two logical CPUs, about 2 GB RAM; threads 2, batch size 32.
 - nDCG uses exponential gains and logarithmic discount; binary judgments make linear and exponential gains agree here. Unjudged documents score zero.
 
-## Your collection
+---
+
+## 🧩 Your Collection
 
 The generic `cli.py check` and `cli.py sweep` paths are read-only. The SciFact `benchmark.py` path creates a collection and writes points; do not confuse the two.
 
@@ -113,7 +136,9 @@ The average lengths and query count above are examples. Replace them with your o
 
 The generic CLI evaluates on the supplied labels only. Keep tuning and evaluation inputs separate yourself; it does not create a held-out split for you.
 
-## Project map
+---
+
+## 🗂️ Project Map
 
 | File | Purpose |
 | --- | --- |
@@ -124,11 +149,15 @@ The generic CLI evaluates on the supplied labels only. Keep tuning and evaluatio
 | `test_benchmark.py` | Tests using real SciFact data and sparse vectors |
 | CSV/JSON and `RUN.md` | Committed result evidence and provenance |
 
-## Limits
+---
+
+## ⚠️ Limits
 
 One dataset, one encoder pair and one fixed split. Not preregistered. Dense text is truncated; BM25 sees full text. No multi-shard experiment, ANN-recall measurement, online traffic, concurrency test or alternative encoder sweep. No controlled broken-vs-fixed ablation isolates each preflight check's effect.
 
-## Sources and license
+---
+
+## 📚 Sources and License
 
 - [BEIR dataset list](https://github.com/beir-cellar/beir/wiki/Datasets-available)
 - [SciFact dataset card](https://huggingface.co/datasets/BeIR/scifact), CC-BY-SA-4.0; downloaded, not redistributed here
