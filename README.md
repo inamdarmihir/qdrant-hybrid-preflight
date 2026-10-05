@@ -4,6 +4,7 @@
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](requirements.txt)
 [![Tested with Qdrant 1.17.1](https://img.shields.io/badge/tested%20with-Qdrant%201.17.1-dc244c.svg)](RUN.md)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Last commit](https://img.shields.io/github/last-commit/inamdarmihir/qdrant-hybrid-preflight)](https://github.com/inamdarmihir/qdrant-hybrid-preflight/commits/main)
 
 ---
