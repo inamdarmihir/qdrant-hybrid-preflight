@@ -1,117 +1,115 @@
 # Qdrant Hybrid Preflight
 
-A runnable companion to [Your Hybrid Search Benchmark May Be Lying to You](https://mihirinamdar.substack.com/p/your-hybrid-search-benchmark-may). This repo expands the inline preflight check and adds a small sweep runner. The published article has not been changed.
+A runnable companion to [Your Hybrid Search Benchmark May Be Lying to You](https://mihirinamdar.substack.com/p/your-hybrid-search-benchmark-may). It checks the settings a hybrid benchmark depends on, then runs real retrieval on BEIR SciFact. The published article is unchanged.
 
-It checks what the collection and supplied request actually expose. It says "unverified" when a fact lives outside Qdrant. It does not turn missing metadata into a pass.
+No mock documents, fake embeddings or invented relevance labels. The default command downloads all 5,183 scientific abstracts and the 300 BEIR test queries with real judgments. It embeds title + abstract with MiniLM, encodes BM25 with FastEmbed, indexes Qdrant, checks the setup, tunes on 150 queries, and evaluates the chosen configuration on the other 150.
 
-## What it does
+## Run it
 
-| Check | Evidence | Limit |
-| --- | --- | --- |
-| Sparse IDF modifier | Live collection config | Caller declares whether encoder expects IDF. BM25/miniCOIL usually do; SPLADE already weights terms. |
-| BM25 average length | Supplied encoder value and measured tokenized corpus mean | Neither can be recovered from stored sparse vectors. Raw whitespace counts are not the encoder's token counts. |
-| Fusion placement | Recursive walk of the supplied QueryRequest | Nested fusion can run per shard. It may be intentional before rescoring. This does not inspect a production client's real network traffic. |
-| Fusion score threshold | Supplied root or nested fusion request | A dense similarity threshold is not a fused-score threshold. |
-| Label count | Supplied count or evaluation query list | Below 50 is a warning heuristic, not a significance test. Above 50 is not proof of power. |
+Python 3.10 or newer, Docker, CPU, internet for the first dataset/model downloads, and a few GB of disk space. On the measured 2-CPU machine, embedding the corpus took several minutes. Later runs cache dense batches by dataset checksum and actual ONNX model hash. Network/download time varies.
 
-The sweep runs dense and sparse baselines, DBSF, and configurable RRF `k`, candidate depths and weight pairs. Fusion is always at the query root. Output includes per-query rankings, nDCG, serial median/p95 request time, and paired-bootstrap delta intervals against the better single retriever.
+Start a disposable server in one terminal:
 
-## Install and run
+```bash
+docker run --rm -p 6333:6333 qdrant/qdrant:v1.17.1
+```
 
-Python 3.10 or newer. Tested here on Python 3.10.12, qdrant-client 1.17.1 and Qdrant server 1.17.1. RRF parameters require Qdrant 1.17 or later. Start with the pinned versions before upgrading either side.
+In another terminal:
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
-python -m pytest -q
-python demo.py
+python benchmark.py
 ```
 
-No API key, Docker, embedding downloads or remote service is needed for the local demo. It creates six points in an in-memory collection and executes 28 configurations over 12 queries. Each point and query uses hand-authored vectors. The sparse vector is called `bm25` for the API example, but is NOT produced by a BM25 encoder.
+`python benchmark.py` is the single download-index-check-sweep command. It needs the running server, not a Qdrant cloud account or API key. It writes `results/development.csv`, `heldout.csv`, full per-query JSON rankings, and metadata with the exact split IDs and model hash. The first run downloads the pinned SciFact archive and model files.
 
-For a real server smoke test, start a disposable pinned container:
+The collection name is `scifact_hybrid_preflight`. The command REFUSES to overwrite an existing collection. For another run use a fresh disposable server or a new name:
 
 ```bash
-docker run --rm -p 6333:6333 qdrant/qdrant:v1.17.1
-# in another terminal with the virtual environment active:
-python demo.py --url http://localhost:6333 --output results/my-server-run.json
+python benchmark.py --collection scifact_second_run
+python -m pytest -q test_benchmark.py
 ```
 
-The demo writes a collection called `hybrid_preflight_demo`. It refuses to overwrite an existing collection. Use a fresh instance, not production. The CLI below only reads collection config and executes queries; it never creates, deletes or changes points.
+The tests also read the checksum-verified SciFact data and real sparse query vectors. No dummy fixture is required. Dataset files and model caches are not committed.
 
-## Check an existing collection
+## What the measured run says
+
+Run on 2026-10-05 against Qdrant server 1.17.1. The development set chose DBSF with 50 candidates from each retriever. Its held-out result was higher than either individual retriever in this setup.
+
+| Configuration | Development nDCG@10, 150 queries | Held-out nDCG@10, 150 queries |
+| --- | ---: | ---: |
+| Dense MiniLM | 0.601115 | 0.689049 |
+| BM25 sparse | 0.651940 | 0.725251 |
+| DBSF, depth 50 | 0.688005 | 0.771831 |
+
+On the held-out queries DBSF beat sparse by **0.046580 absolute nDCG@10**. The paired percentile-bootstrap 95% interval for that delta was **[0.020206, 0.073512]**, 2,000 resamples, seed 42. That interval excludes zero for this fixed chosen configuration and this sample. It is not a universal claim that DBSF wins, and it does not establish causality for the preflight checks.
+
+`development.csv` contains the complete 28-configuration tuning grid: dense, sparse, DBSF at depths 50/200, and RRF at k=2/5/20/61 with weights 1:1/2:1/1:2 at both depths. `heldout.csv` contains only the two baselines and the development winner. A second execution with the same real embeddings reproduced these quality scores. Captured latency columns are serial HTTP request times on this machine, not load-test or production p95 claims.
+
+## Reproduction details
+
+- Corpus: BEIR SciFact, archive MD5 `5f7d1de60b170fc8027bb7898e2efca1`; URL and SHA256 in `metadata.json`.
+- All 5,183 documents; title + one space + abstract, no chunking.
+- All 300 judged BEIR test queries. Sort query IDs lexicographically, shuffle with Python `random.Random(42)`, first 150 for development, remaining 150 held out. This is a custom split of BEIR's test set, NOT the official BEIR train/test protocol. Exact IDs are recorded in `metadata.json`.
+- Dense: `sentence-transformers/all-MiniLM-L6-v2`, 384 dimensions, cosine, FastEmbed ONNX, 256-token truncation. Actual ONNX SHA256 recorded in `metadata.json`.
+- Sparse: FastEmbed `Qdrant/bm25`, English stemming/stopword filtering, k=1.2, b=0.75, server-side IDF.
+- BM25 avg_len: **151.38028169014083**, measured AFTER the same tokenization, filtering and stemming used for encoding. FastEmbed's public `token_count` counts before filtering, so the pinned adapter uses its internal tokenizer/stemmer. This should be rechecked when upgrading FastEmbed.
+- Qdrant 1.17.1, one shard, exact dense search, no quantization or reranker. This isolates fusion from approximate-neighbor recall.
+- Python 3.10.12; qdrant-client 1.17.1; fastembed 0.7.4; numpy 2.2.6; onnxruntime 1.23.2; tokenizers 0.23.2.
+- Linux x86_64; Intel Xeon @ 2.60GHz, 2 logical CPUs, approximately 2 GB RAM. Embedding threads=2, batch size=32. CPU only.
+- The complete corpus was really embedded. The final repeat used that keyed dense cache; its roughly 30-second elapsed time is NOT first-run runtime. `metadata.json` records the repeat's actual timing.
+
+nDCG uses exponential gains `(2**grade - 1)` and logarithmic rank discount. SciFact judgments here are binary, so exponential and linear gains agree. Unjudged returned documents count as zero relevance. The bootstrap resamples per-query paired score deltas. Baseline selection is the better single retriever on each reported split; sparse is that baseline in this run.
+
+## What preflight can and cannot check
+
+| Check | Evidence | Limit |
+| --- | --- | --- |
+| Sparse IDF modifier | Live collection config | Caller declares encoder expectations. BM25/miniCOIL need server IDF; SPLADE already weights terms. |
+| BM25 avg_len | Actual encoder value + measured tokenized corpus mean | Cannot recover these from stored sparse vectors. |
+| Fusion placement | Recursive walk of the QueryRequest | Nested fusion runs per shard on a sharded server; may be intentional before rescoring. |
+| Fusion score threshold | Request root/nested fusion | Dense similarity thresholds are not fused-score thresholds. |
+| Label count | Actual evaluation query count | Small-sample heuristic, not a power or significance guarantee. |
+
+The pipeline supplies the real encoder value, measured average, request and count. Missing inputs in the general CLI stay "unverified", never silently pass. A connection failure propagates instead of producing an empty clean report.
+
+## Use your own collection
+
+The preflight/sweep CLI is read-only: no point writes or collection deletion. Supply vectors made with the SAME encoders as your indexed data and relevance judgments keyed by Qdrant point ID strings. Each query JSON entry has `id`, `dense`, `sparse` (`indices` + `values`), and `qrels` (point ID to grade). Query IDs must be unique. Every query needs a positive judgment.
 
 ```bash
-# Optional authentication: export QDRANT_API_KEY in your environment.
-# Never put keys in a query file or commit them.
-python cli.py check \
-  --url http://localhost:6333 --collection my_collection \
-  --sparse-name bm25 --request example-request.json \
-  --bm25-avg-len 42 --measured-avg-len 40 \
-  --labeled-query-count 120 --output check.json
+# Optional: set QDRANT_API_KEY in your environment, never in a committed file.
+python cli.py check --url http://localhost:6333 --collection my_collection \
+  --sparse-name bm25 --request my-production-request.json \
+  --bm25-avg-len 151.38 --measured-avg-len 151.38 \
+  --labeled-query-count 150 --output check.json
+
+python cli.py sweep --url http://localhost:6333 --collection my_collection \
+  --dense-name dense --sparse-name bm25 --queries my-real-queries.json \
+  --request my-production-request.json \
+  --bm25-avg-len 151.38 --measured-avg-len 151.38 \
+  --depths 50 200 --ks 2 5 20 61 --limit 10 --output sweep.json
 ```
 
-The numbers 42, 40 and 120 are examples, not measurements. Replace them with your encoder configuration, mean token length after its exact stemming/stopword rules, and label count. Replace the request with your actual production request. Use `--encoder-includes-idf` for an encoder with built-in IDF; it warns if Qdrant would apply IDF again. A missing sparse vector or incompatible IDF setting returns exit code 2. Warnings remain in the report and are not silently treated as errors or passes. Network/collection errors propagate.
+Replace those values with YOUR measured corpus and encoder values, not SciFact's. `--encoder-includes-idf` handles already-weighted sparse encoders. Errors stop the sweep; warnings remain visible. The generic CLI evaluates the grid on the supplied labels only. Use separate tuning and held-out files yourself, or use the SciFact pipeline's split as the pattern.
 
-## Sweep your own labels
+## Limits
 
-Supply a JSON list shaped like `example-queries.json`. Each query has a unique ID, its dense and sparse query vectors, and `qrels` mapping point IDs (as strings) to nonnegative relevance grades. Every query must have a positive judgment. Unknown returned documents count as relevance zero. Point IDs must match your collection's IDs, not a document title.
+One dataset, one model pair, one fixed query split. Query-level bootstrap assumes independent queries; related claims can weaken that assumption. Selection happened only on development, but this is not a preregistered experiment. A statistically positive delta here does not predict another corpus.
 
-```bash
-python cli.py sweep \
-  --url http://localhost:6333 --collection my_collection \
-  --dense-name dense --sparse-name bm25 \
-  --queries my-heldout-queries.json --request my-request.json \
-  --bm25-avg-len 42 --measured-avg-len 40 \
-  --depths 20 50 200 --ks 2 5 20 61 --limit 10 \
-  --output sweep.json
-```
+Dense abstracts can be truncated at 256 tokens. BM25 sees full text. No multi-shard experiment, no ANN-recall evaluation, no online traffic, no concurrency test, no alternative encoder sweep. The preflight checks were satisfied in the measured run; there is no controlled broken-vs-fixed ablation proving how much each check helps.
 
-Generate query vectors with the SAME models, dimensions, token vocabulary and preprocessing that indexed the collection. This repo does not invent embeddings or corpus statistics. To sweep weights from Python:
+## Files and sources
 
-```python
-from sweep import run_sweep
-report = run_sweep(client, "my_collection", queries,
-                   depths=(20, 50, 200), ks=(2, 5, 20, 61),
-                   weight_pairs=((1., 1.), (2., 1.), (1., 2.)))
-```
+`benchmark.py`: end-to-end real-data pipeline. `preflight.py`: checks. `sweep.py`: metric, grid and intervals. `cli.py`: existing-collection adapter. `test_benchmark.py`: real-data tests. `development.csv`, `heldout.csv`, `metadata.json`, `RUN.md`: measured results/provenance.
 
-Use a development set to choose settings, then rerun the chosen configuration on untouched test queries. The included grid reports exploratory intervals, not corrected significance after choosing the best of many trials. nDCG uses `(2**grade - 1) / log2(rank + 1)` with one-based rank. Bootstrap resamples paired per-query differences 2,000 times, seed 42. Repeated/paraphrased queries are not independent evidence.
+Starting function: [AI Hive source](https://github.com/inamdarmihir/aihive/blob/da26c9b59ade8286de5997113367825f6bede662/content/posts/qdrant-hybrid-search-sweep-it-yourself.md).
 
-## What actually ran
+- [BEIR dataset list](https://github.com/beir-cellar/beir/wiki/Datasets-available)
+- [SciFact dataset card](https://huggingface.co/datasets/BeIR/scifact), source data CC-BY-SA-4.0. Dataset is downloaded, not redistributed here.
+- [Qdrant hybrid tuning](https://qdrant.tech/documentation/search-tuning/how-to-tune-hybrid-search/)
+- [Qdrant pre-tuning checks](https://qdrant.tech/documentation/search-tuning/before-tuning-a-qdrant-collection/)
 
-On 2026-10-05, the automated implementation run completed:
-
-- 22 tests, all passing (see `RUN.md`).
-- Local in-memory demo: 28 configurations, 12 queries, six hand-authored points.
-- Real Qdrant 1.17.1 server binary: the same demo, plus a read-only CLI collection check.
-
-| Toy run | Dense nDCG@10 | Sparse nDCG@10 | DBSF depth 10 | Equal-weight RRF k=2, depth 10 |
-| --- | ---: | ---: | ---: | ---: |
-| Local in-memory | 0.717046 | 0.898354 | 0.898354 | 0.896176 |
-| Qdrant server | 0.717046 | 0.898354 | 0.898354 | 0.905191 |
-
-These are a smoke test, NOT retrieval quality evidence. The fixture has deliberate score ties, six points and reused query patterns. Local/server tie order and even repeated server request order can change ranks. Do not read a winner or a production improvement into these numbers. Depths 10 and 20 both exceed the entire six-point corpus, so this fixture does not validate candidate truncation behavior.
-
-Measured CSV summaries are in `toy-local.csv` and `toy-server.csv`. Running the demo writes full JSON with individual rankings. Timings are serial cold/warm mixed request timings from one sandbox, not concurrency or latency-budget benchmarks. Local mode is not a substitute for server sharding, HNSW/index behavior, or production data. No real corpus, tokenizer-based avg_len, BM25 text encoding or multi-shard experiment has been measured here.
-
-## Files
-
-- `preflight.py`: typed findings and request/config checks.
-- `sweep.py`: validation, query grid, metric and paired intervals.
-- `cli.py`: read-only commands for an existing collection.
-- `demo.py`: disposable synthetic fixture.
-- `example-queries.json`, `example-request.json`: toy query/request schemas.
-- `test_preflight.py`, `test_sweep.py`: validation, recursive checks and local-engine integration.
-- `RUN.md`, `toy-local.csv`, `toy-server.csv`: actual smoke-test summaries, not research claims.
-
-## Sources and relationship to the article
-
-The starting function is in [the AI Hive source](https://github.com/inamdarmihir/aihive/blob/da26c9b59ade8286de5997113367825f6bede662/content/posts/qdrant-hybrid-search-sweep-it-yourself.md). This version checks exact fusion types recursively, reports missing measured avg_len explicitly, validates impossible inputs, and supports encoders whose sparse weights already include IDF. It does not reproduce or claim ownership of Qdrant's published benchmark numbers.
-
-- [Qdrant: How to Tune Hybrid Search](https://qdrant.tech/documentation/search-tuning/how-to-tune-hybrid-search/)
-- [Qdrant: What to Check Before Tuning a Collection](https://qdrant.tech/documentation/search-tuning/before-tuning-a-qdrant-collection/)
-- [Qdrant Query API and hybrid queries](https://qdrant.tech/documentation/concepts/hybrid-queries/)
-
-No license has been chosen yet. This repo is not a Qdrant-endorsed benchmark.
+Code license not chosen yet. This is not a Qdrant-endorsed benchmark.
