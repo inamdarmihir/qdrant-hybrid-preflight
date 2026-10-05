@@ -52,6 +52,7 @@ The repo also ships a runnable experiment on the full BEIR SciFact corpus: tune 
 ## Contents
 
 - [Quickstart](#quickstart)
+- [Data and ground truth](#data-and-ground-truth)
 - [Results](#results)
 - [Preflight checks](#preflight-checks)
 - [Use it on your collection](#use-it-on-your-collection)
@@ -89,6 +90,23 @@ python -m qdrant_hybrid_preflight.benchmark --collection scifact_second_run
 ```
 
 Outputs go to `results/`: development and held-out CSV/JSON, per-query rankings and metadata. Dense embeddings are cached using dataset and model provenance, so cached runtime is not first-run runtime.
+
+## Data and ground truth
+
+Nothing in the results below is synthetic. Documents, queries and relevance judgments all come from a published benchmark; this repo only embeds, indexes and scores them.
+
+| Item | Source | Notes |
+| --- | --- | --- |
+| Corpus (5,183 abstracts) and 300 test queries | **BEIR SciFact**, [download](https://public.ukp.informatik.tu-darmstadt.de/thakur/BEIR/datasets/scifact.zip) · [dataset card](https://huggingface.co/datasets/BeIR/scifact) · [BEIR repo](https://github.com/beir-cellar/beir) | Archive MD5 `5f7d1de60b170fc8027bb7898e2efca1` and SHA256 `536e14446a0ba56ed1398ab1055f39fe852686ecad24a6306c80c490fa8e0165` are checked or recorded in [`metadata.json`](metadata.json). CC-BY-SA-4.0; downloaded at run time, not redistributed. |
+| Ground truth (relevance judgments) | `qrels/test.tsv` shipped inside that archive | Human-annotated judgments from the original SciFact dataset. We do not generate, edit or infer any label. Unjudged documents score zero. |
+| Original dataset | Wadden et al., [*Fact or Fiction: Verifying Scientific Claims*](https://arxiv.org/abs/2004.14974) (EMNLP 2020) · [allenai/scifact](https://github.com/allenai/scifact) | The source of the claims and evidence annotations. |
+| BEIR packaging | Thakur et al., [*BEIR: A Heterogenous Benchmark for Zero-shot Evaluation of Information Retrieval Models*](https://arxiv.org/abs/2104.08663) (2021) | Defines the corpus/queries/qrels format used here. |
+| Dense encoder | [`sentence-transformers/all-MiniLM-L6-v2`](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) via FastEmbed | ONNX weight hash recorded in `metadata.json`. |
+| Sparse encoder | [`Qdrant/bm25`](https://huggingface.co/Qdrant/bm25) via FastEmbed | k=1.2, b=0.75, measured average length recorded. |
+
+**What we add, and what it means.** The 150/150 development/held-out split is **our own** (seed 42) over BEIR's 300 test queries, so it is not the official BEIR protocol and the numbers are not comparable to BEIR leaderboard entries. The query IDs for both halves are recorded in `metadata.json`.
+
+**Not real data.** `tests/test_offline.py` uses tiny hand-built inputs to unit-test the checks. They never feed any reported number.
 
 ## Results
 
