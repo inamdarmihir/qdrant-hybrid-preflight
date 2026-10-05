@@ -1,8 +1,0 @@
-{
-  "prefetch": [
-    {"query": [1.0, 0.1, 0.0], "using": "dense", "limit": 20},
-    {"query": {"indices": [0, 1], "values": [1.0, 1.0]}, "using": "bm25", "limit": 20}
-  ],
-  "query": {"rrf": {"k": 2, "weights": [1.0, 1.0]}},
-  "limit": 10
-}
